@@ -1,40 +1,68 @@
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
 
-int main ()
+#include <pwd.h>
+/*
+struct passwd {
+    char *pw_name;
+    char *pw_passwd;
+    uid_t pw_uid;
+    gid_t pw_gid;
+    time_t pw_change;
+    char *pw_class;
+    char *pw_gecos;
+    char *pw_dir;
+    char *pw_shell;
+    time_t pw_expire;
+}; 
+*/
+
+#include <grp.h>
+/*
+struct group {
+    char *gr_name;
+    char *gr_passwd;
+    gid_t gr_gid;
+    char **gr_mem;
+};
+*/
+
+int main()
 {
-    char username[100];
-    printf("Nhap username: ");
-    scanf("%s", username);
-    char command[5][256];
-//    printf("Thong tin user ");
-    snprintf(command[0], sizeof(command[0]), "sudo cat /etc/passwd | grep -w %s | cut -d: -f1", username);
-//    strcpy(listUser,username);
-//    strcpy(command, "sudo cat /etc/passwd | grep -w %s | cut -d':' -f1", username );
-//    system("username="listUser);
-//    system(command[0]);
-//    printf("\n%d\n",checkUser);
-//    system() returns 0 if successful
-    char checkUser = system(command[0]);
-    fprintf (stdout, "system ret: [%d] \n", checkUser >> 8); 
-//    printf("%s",checkUser);
-    if (system(NULL)) {
-//        printf("Thong tin user %s \n", username);
-        printf("\nuid: ");
-        snprintf(command[1], sizeof(command[1]), "sudo cat /etc/passwd | grep -w %s | cut -d: -f3", username);
-        system(command[1]);
-        printf("\nusername: ");
-        snprintf(command[2], sizeof(command[2]), "sudo cat /etc/passwd | grep -w %s | cut -d: -f1", username);
-        system(command[2]);
-        printf("\nhome directory: ");
-        snprintf(command[3], sizeof(command[2]), "sudo cat /etc/passwd | grep -w %s | cut -d: -f6", username);
-        system(command[3]);
-        printf("\ngroups: ");
-        strcpy(command[4], "groups");
-        system(command[4]);
-    } else {
-        printf("Khong tim thay user %s", username);
+    int i;
+    char user[100];
+    printf("Enter user: ");
+    scanf("%s", user);
+    struct passwd *userinfo;
+    struct group *gr;
+
+    userinfo = getpwnam(user);
+
+    if(!userinfo) {
+        printf("User %s not found!\n", user);
+        exit(EXIT_SUCCESS);
     }
-    return(0);
-} 
+
+    printf("User ID: %d", userinfo->pw_uid);
+    printf("\nUsername: %s", userinfo->pw_name);
+    printf("\nHome Directory: %s", userinfo->pw_dir);
+
+    int ngroups = 0; // number of groups
+    getgrouplist(userinfo->pw_name, userinfo->pw_gid, NULL, &ngroups); // return -1 due to the user is a member of more than *ngroups groups (current ngroups = 0)
+/*
+    getgrouplist() stores an array of GroupID to 'groups' and number of these groups to ngroups if the number of groups of which user is a member <= *ngroups passed
+    then, the value returned in *ngroups can be used to resize the buffer passed to a further call getgrouplist().
+*/
+    gid_t groups[ngroups]; // declare an array of GroupID
+    getgrouplist(userinfo->pw_name, userinfo->pw_gid, groups, &ngroups);
+    
+    printf("\nGroups: ");
+    for (i = 0; i < ngroups; i++) {
+        gr = getgrgid(groups[i]); // returns pointer to group struct (get the group ID's info struct)
+        if (gr != NULL)
+            printf("%s ", gr->gr_name);
+    }
+    printf("\n");
+        
+    exit(EXIT_SUCCESS);
+}
