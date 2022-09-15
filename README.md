@@ -1,1 +1,1 @@
-Web Security Tasks at VCS
+Web Security Tasks Training at VCS
