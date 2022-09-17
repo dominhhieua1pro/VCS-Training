@@ -1,17 +1,9 @@
-//#define _XOPEN_SOURCE
 #include <unistd.h>
-//#include <crypt.h>
-//#include <ctype.h>
-//#include <errno.h>
 #include <pwd.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-//#include <sys/stat.h>
-//#include <sys/types.h>
 #include <time.h>
-//#include <cstdlib>
-//#include <random>
 #include <shadow.h>
 /*
 struct spwd {
@@ -27,18 +19,13 @@ struct spwd {
 }
 */
 
-// echo "userA:userA" | chpasswd -c SHA512
-
 char* generate_salt(char salt[]) {
-    unsigned long seed[2];
- //   char salt[] = "$6$................";
     const char *const seedchars = "./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-//    char *password;
-    int i;
-    seed[0] = time(NULL);
-    seed[1] = getpid() ^ (seed[0] >> 14 & 0x30000);
+    int i, seedchars_length = strlen(seedchars);
+    srand(time(NULL));
     for (i = 0; i < 16; i++) {
-        salt[3+i] = seedchars[(seed[i/5] >> (i%5)*6) & 0x3f];    
+        unsigned int seed_rand = rand() % seedchars_length;
+        salt[3+i] = seedchars[seed_rand];
     }
     return salt;
 }
@@ -46,31 +33,28 @@ char* generate_salt(char salt[]) {
 void remove_user(char user[]) {
     FILE *fptrr, *fptrw;
     fptrr = fopen("/etc/shadow", "r");
-    fptrw = fopen("/tmp/shadow.temp", "w");
-    
     if(fptrr == NULL) {
       printf("Error opening file /etc/shadow\n");   
       exit(1);             
     }
-    
+    fptrw = fopen("/tmp/shadow", "w");
     if(fptrw == NULL) {
-      printf("Error writing file /tmp/shadow.temp\n");   
+      printf("Error writing file /tmp/shadow\n");   
       exit(1);             
     }
-    
-    char arr[128];
-    char *p;
-    while (fgets(arr, 128, fptrr) != NULL) {
+    char arr[256];
+    char *p, *tmp;
+    while (fgets(arr, 256, fptrr) != NULL) {
+        strcpy(tmp, arr);
         p = strtok(arr, ":");
         if (strcmp(user, p) != 0) {
-             fprintf(fptrw, "%s", arr);
+             fprintf(fptrw, "%s", tmp);
         }
     }
-    
     fclose(fptrr);
     fclose(fptrw);
     remove("/etc/shadow");
-    rename("/tmp/shadow.temp", "/etc/shadow");
+    rename("/tmp/shadow", "/etc/shadow");
 }
 
 int check_password(char password[], char user[]) {
@@ -82,7 +66,7 @@ int check_password(char password[], char user[]) {
 
 int main() {
     char old_password[128], new_password[128], user[] = "userA";
-    char salt[19] = "$6$";
+    char salt[20] = "$6$";
     struct spwd *shadow_entry;
     printf("Input old password: ");
     scanf("%s", old_password);
@@ -90,33 +74,30 @@ int main() {
     if (!check_password(old_password, user)) {
         while ((shadow_entry = getspent()) != NULL) {
             strcpy(shadow_entry_name, shadow_entry->sp_namp);
-            if(strcmp(shadow_entry_name, user)) {
+            if(!strcmp(shadow_entry_name, user)) {
                 break;
             }
-        };
-        
+        };       
         printf("Enter a new password: ");
         scanf("%s", new_password);
         strcpy(salt, generate_salt(salt));
         char* hash_char = crypt(new_password, salt);
         remove_user(user);
-        shadow_entry->sp_pwdp = hash_char;
-        
+        shadow_entry->sp_pwdp = hash_char;       
         FILE* shadow_file = fopen("/etc/shadow", "a");
         if (!shadow_file) {
-            printf("Failed to open file /etc/shadow\n");
+            printf("Failed to open file /etc/shadow! Permission denied\n");
+            remove("/tmp/shadow");
             return 0;
         }
         if (putspent(shadow_entry, shadow_file) == -1) {
             printf("An error occurred\n");
             return 0;
-        }
-        
-        printf("Password updated successfully\n");
+        }      
+        printf("Password updated successfully!!!\n");
         return 1;
-    }
-    
-    printf("Password authentication failed\n");
+    }   
+    printf("Password authentication failure\n");
     return 1;
     
 //  The getspent() function returns a pointer to the next entry in the shadow password database.

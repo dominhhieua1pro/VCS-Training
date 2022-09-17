@@ -27,42 +27,39 @@ struct group {
 };
 */
 
-int main()
-{
+int main() {
     int i;
     char user[100];
-    printf("Enter user: ");
+    printf("Enter a username: ");
     scanf("%s", user);
     struct passwd *userinfo;
     struct group *gr;
-
+    
     userinfo = getpwnam(user);
-
     if(!userinfo) {
         printf("User %s not found!\n", user);
         exit(EXIT_SUCCESS);
     }
-
     printf("User ID: %d", userinfo->pw_uid);
     printf("\nUsername: %s", userinfo->pw_name);
     printf("\nHome Directory: %s", userinfo->pw_dir);
 
     int ngroups = 0; // number of groups
     getgrouplist(userinfo->pw_name, userinfo->pw_gid, NULL, &ngroups); // return -1 due to the user is a member of more than *ngroups groups (current ngroups = 0)
-/*
-    getgrouplist() stores an array of GroupID to 'groups' and number of these groups to ngroups if the number of groups of which user is a member <= *ngroups passed
-    then, the value returned in *ngroups can be used to resize the buffer passed to a further call getgrouplist().
-*/
     gid_t groups[ngroups]; // declare an array of GroupID
     getgrouplist(userinfo->pw_name, userinfo->pw_gid, groups, &ngroups);
     
     printf("\nGroups: ");
     for (i = 0; i < ngroups; i++) {
-        gr = getgrgid(groups[i]); // returns pointer to group struct (get the group ID's info struct)
+        gr = getgrgid(groups[i]); // returns pointer to struct group (get the struct group ID's info)
         if (gr != NULL)
             printf("%s ", gr->gr_name);
     }
-    printf("\n");
-        
+    printf("\n");       
     exit(EXIT_SUCCESS);
+    
+/*
+    getgrouplist() stores an array of GroupID to 'groups' and number of these groups to ngroups if the number of groups of which user is a member <= *ngroups passed
+    then, the value returned in *ngroups can be used to resize the buffer passed to a further call getgrouplist().
+*/
 }
