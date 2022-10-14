@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import socket
 import argparse, re
 from urllib.parse  import urlparse
@@ -23,20 +22,21 @@ def recvResponse(client, request):
     response = ""
     while True:
         try:
-            data = client.recv(4096)
+            data = client.recv(8192)
             if not data:
                 break
         except socket.timeout:
             break
         response += data.decode()
+    client.close()
     return response
 
-def post(client,request):
+def recvResponsePost(client, request):
     client.sendall(request)         
     response = ""
     while True:
         try:
-            data = client.recv(4096)
+            data = client.recv(8192)
             if not data:
                 break
         except socket.timeout:
@@ -62,16 +62,22 @@ def getCookieUpdate(listCookie, response):
     else:
         return 1
 
-def readFileImage(filename, mod):
-    with open(filename, mode=mod) as f:
-        return f.read()
-mime = magic.Magic(mime=True)
-read_file = readFileImage(localfile, "rb")
+def readFile(filename, mod):
+    with open(filename, mode=mod) as file:
+        return file.read()
 
-# check user login?
+read_file = readFile(localfile, "rb")
+
+def getFileUploadPath(localfile, response):
+    if ('image' in magic.from_file(localfile, mime=True)):
+        path_url = re.findall(r'<span class="full-size-link"><span class="screen-reader-text">Full size</span><a href=\"(.*)\"', response)       
+    else:
+        path_url = re.findall(r'<p class="attachment"><a href=\'(.*)\'', response)
+    return path_url[0]
+
+# check user login
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
     domain = urlparse(f'{HOST}').netloc
-    #print(domain)
 
     # socket connect
     client.connect((domain,PORT))
@@ -92,98 +98,129 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
     response = recvResponse(client,request)
     
     cookie_response = re.findall(r"Set-Cookie: (wordpress_logged_in_.*?)\r\n", response)
-    # if cookie_response:
-    #     print(f"User {user} đăng nhập thành công ")
-    # else:
-    #     print(f"User {user} đăng nhập thất bại")
-    
+    if not cookie_response:
+        print(f"Upload failed.")
+        exit(1)
+
     getCookieUpdate(listCookie, response)
+    client.close()
 
 # get _wpnonce
 request = (
-        f'GET /wp-admin/media-new.php/ HTTP/1.1\r\n'
+        f'GET /wp-admin/media-new.php HTTP/1.1\r\n'
         f'Host: {domain}\r\n'
         f'Upgrade-Insecure-Requests: 1\r\n'
-        f'User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:78.0) Gecko/20100101 Firefox/78.0\r\n'
         f'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*\r\n'
         f'Cookie: {getCookie(listCookie)}\r\n'
         f'Connection: close\r\n'
         f'\r\n'
-        )
+)
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
     client.connect((domain,PORT))
     response = recvResponse(client, request)
     getCookieUpdate(listCookie, response)
+    client.close()
     
 params = re.search('"multipart_params":.*_wpnonce":"[0-9a-z]+"', response)
 wp_nonce = re.search('(?<=_wpnonce":")[a-z0-9]{10}', params.group(0))
 wp_nonce = wp_nonce.group(0)
 
 file_name = localfile.split("\\")[-1]
+
 request_body1 = (
-        '-----------------------------335679337115370071493285990705\r\n' # WebKitFormBoundaryXXX
+        '--------WebKitFormBoundaryHurJcusp422ynb4K\r\n' 
         f'Content-Disposition: form-data; name="async-upload"; filename="{file_name}"\r\n'
-        f'Content-Type: {mime.from_file(localfile)}\r\n\r\n')
+        f'Content-Type: {magic.from_file(localfile, mime=True)}\r\n\r\n')
         
 request_body2 = ('\r\n'
-        f'-----------------------------335679337115370071493285990705\r\n'
+        f'--------WebKitFormBoundaryHurJcusp422ynb4K\r\n'
         f'Content-Disposition: form-data; name="html-upload"\r\n'
         f'\r\n'
         f'Upload\r\n'
-        f'-----------------------------335679337115370071493285990705\r\n'
+        f'--------WebKitFormBoundaryHurJcusp422ynb4K\r\n'
         f'Content-Disposition: form-data; name="post_id"\r\n'
         f'\r\n'
         f'0\r\n'
-        f'-----------------------------335679337115370071493285990705\r\n'
+        f'--------WebKitFormBoundaryHurJcusp422ynb4K\r\n'
         f'Content-Disposition: form-data; name="_wpnonce"\r\n'
         f'\r\n'
         f'{wp_nonce}\r\n'
-        f'-----------------------------335679337115370071493285990705\r\n\r\n'
+        f'--------WebKitFormBoundaryHurJcusp422ynb4K\r\n\r\n'
         f'Content-Disposition: form-data; name="_wp_http_referer"\r\n'
         f'/wp-admin/media-new.php\r\n'
-        f'-----------------------------335679337115370071493285990705--\r\n'
+        f'--------WebKitFormBoundaryHurJcusp422ynb4K--\r\n'
 )
+
 body = b''.join([request_body1.encode(),read_file,request_body2.encode()])
+
 request = (
-        f'POST /wp-admin/media-new.php/ HTTP/1.1\r\n'
+        f'POST /wp-admin/async-upload.php HTTP/1.1\r\n'
         f'Host: {domain}\r\n'
         f'Cache-Control: max-age=0\r\n'
         f'Content-Length: {len(body)}\r\n'
         f'Upgrade-Insecure-Requests: 1\r\n'
-        f'Content-Type: multipart/form-data; boundary=---------------------------335679337115370071493285990705\r\n'
-        f'User-Agent: User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:78.0) Gecko/20100101 Firefox/78.0\r\n'
+        f'Content-Type: multipart/form-data; boundary=------WebKitFormBoundaryHurJcusp422ynb4K\r\n'
+        f'User-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36\r\n'
         f'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*\r\n'
         f'Accept-Encoding: gzip, deflate\r\n'
-        f'Accept-Language: en-US,en;q=0.9\r\n'
+        f'Accept-Language: vi-VN,vi;q=0.9,fr-FR;q=0.8,fr;q=0.7,en-US;q=0.6,en;q=0.5\r\n'
         f'Cookie: {getCookie(listCookie)}\r\n'
         f'Connection: close\r\n\r\n'
 )
+
 request = b''.join([request.encode(),body])
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
     client.connect((domain,PORT))
-    response = post(client, request)
+    response = recvResponsePost(client, request)
 
-    # find path upload file
-    if "Upload-Attachment-ID" in response:
-        attachment_id = response.split("\r\n")[7].split(" ")[1]
-        path_url = re.compile('<p class="attachment"><a href=\'(.*)\'',flags=0)
+    # find uploaded file path
+    if "X-WP-Upload-Attachment-ID" in response:
+        responseArray = response.split("\r\n")
+        for responseItem in responseArray:
+            if('X-WP-Upload-Attachment-ID' in responseItem):
+                attachment_id = responseItem.split(" ")[1]
+                break
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  
         client.connect((domain,PORT))
         request = (
                 f'GET /?attachment_id={attachment_id} HTTP/1.1\r\n'
-                f'Host: {domain}\r\n'               
-                f'Accept: text/html, */*; q=0.01\r\n'
-                f'User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:78.0) Gecko/20100101 Firefox/78.0\r\n'              
+                f'Host: {domain}\r\n'            
+                f'Accept: text/html, */*; q=0.01\r\n'        
+                f'User-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36'    
                 f'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\n'
-                f'Accept-Language: en-US,en;q=0.9\r\n'
+                f'Accept-Language: vi-VN,vi;q=0.9,fr-FR;q=0.8,fr;q=0.7,en-US;q=0.6,en;q=0.5\r\n'
                 f'Cookie: {getCookie(listCookie)}\r\n'
+                f'Upgrade-Insecure-Requests: 1\r\n' 
+                f'Accept-Language: vi-VN,vi;q=0.9,fr-FR;q=0.8,fr;q=0.7,en-US;q=0.6,en;q=0.5\r\n'        
                 f'Connection: close\r\n\r\n'
-                f'Upgrade-Insecure-Requests: 1'                
         )
-              
         response = recvResponse(client, request)
-        # Returns a list containing all matches
-        print("Upload success. File upload url: " + path_url.findall(response)[0]) 
-    else: print("Upload failed!")
+        if "Location:" in response:
+            responseArray = response.split("\r\n")
+            for responseItem in responseArray:
+                if("Location:" in responseItem):
+                    file_upload_name = responseItem.split("/")[3]
+                    break
+            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  
+            client.connect((domain,PORT))
+            request = (
+                f'GET /{file_upload_name}/ HTTP/1.1\r\n'
+                f'Host: {domain}\r\n'            
+                f'Accept: text/html, */*; q=0.01\r\n'         
+                f'User-Agent: Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36'   
+                f'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\n'
+                f'Accept-Language: vi-VN,vi;q=0.9,fr-FR;q=0.8,fr;q=0.7,en-US;q=0.6,en;q=0.5\r\n'
+                f'Cookie: {getCookie(listCookie)}\r\n'
+                f'Upgrade-Insecure-Requests: 1\r\n' 
+                f'Accept-Language: vi-VN,vi;q=0.9,fr-FR;q=0.8,fr;q=0.7,en-US;q=0.6,en;q=0.5\r\n\r\n'        
+            )
+            response = recvResponse(client, request)
+            print("Upload success. File upload url:", getFileUploadPath(localfile, response))
+        else:
+            print("Upload success. File upload url:", getFileUploadPath(localfile, response))
+    else: 
+        print("Upload failed.")
+
+    client.close()

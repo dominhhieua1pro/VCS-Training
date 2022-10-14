@@ -42,3 +42,5 @@ if cookie_response:
     print(f"User {user} đăng nhập thành công ")
 else:
     print(f"User {user} đăng nhập thất bại")
+
+client.close()
