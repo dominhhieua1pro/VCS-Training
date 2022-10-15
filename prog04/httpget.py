@@ -29,7 +29,7 @@ response = data.decode("utf8")
 #print(response)
 
 title = re.findall(r"<title>(.*)</title>", response)[0]
-print("Title: ", title[0:10])
+print("Title: ", title.split(' ')[0])
 
 #socket close
 client.close()
