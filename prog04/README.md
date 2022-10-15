@@ -18,4 +18,4 @@
 `python3 httpupload.py --url http://blogtest.vnprogramming.com/ --user test --password test123QWE@AD --local-file './file_upload/Jeremie Lyoko.jpg'`
 
 ### httppdownload
-`python3 httpdownload.py --url http://blogtest.vnprogramming.com/ --remote-file /wp-content/uploads/2022/10/Jeremie Lyoko.jpg`
+`python3 httpdownload.py --url http://blogtest.vnprogramming.com/ --remote-file /wp-content/uploads/2022/10/Jeremie-Lyoko-1.jpg`
