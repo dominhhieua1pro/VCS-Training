@@ -24,7 +24,7 @@ request = (f'GET / HTTP/1.1\r\nHost: {domain}\r\n\r\n')
 client.send(request.encode()) # convert to bytes
 
 # socket receive
-data = client.recv(1024)
+data = client.recv(8192)
 response = data.decode("utf8")
 #print(response)
 
